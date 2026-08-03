@@ -1,0 +1,13 @@
+# Discord bot token / private configuration
+src/resources/config.properties
+
+# Java build files
+*.class
+target/
+out/
+bin/
+
+# Editor files
+.vscode/
+.idea/
+*.iml
