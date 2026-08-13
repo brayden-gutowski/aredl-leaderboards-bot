@@ -27,4 +27,10 @@ public class EchoCommand implements Command {
 
         event.reply(textToEcho).setEphemeral(false).queue();
     }
+
+    @Override
+    public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'onSlashCommandInteraction'");
+    }
 }

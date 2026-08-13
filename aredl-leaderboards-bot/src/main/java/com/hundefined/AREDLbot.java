@@ -12,6 +12,7 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 
 public class AREDLbot {
@@ -52,7 +53,10 @@ public class AREDLbot {
         jda.updateCommands()
                 .addCommands(
                     Commands.slash("aredlleaderboards", "Displays the AREDL leaderboards either server-wide or globally")
-                        .addOption(OptionType.STRING, "scope", "Test", true),
+                        .addSubcommands(
+                            new SubcommandData("global", "View the global AREDL leaderboard"),
+                            new SubcommandData("server", "View the server AREDL leaderboard")
+                        ),
                     Commands.slash("echo", "Test command to echo back a message")
                         .addOption(OptionType.STRING, "text", "The message to echo back", true)
                 )

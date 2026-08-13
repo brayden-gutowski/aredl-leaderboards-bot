@@ -8,4 +8,6 @@ public interface Command {
     String getDescription();
 
     void executeSlash(SlashCommandInteractionEvent event);
+
+    void onSlashCommandInteraction(SlashCommandInteractionEvent event);
 }

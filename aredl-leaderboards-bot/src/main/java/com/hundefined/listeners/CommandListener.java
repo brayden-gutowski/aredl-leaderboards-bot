@@ -14,12 +14,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+
 public class CommandListener extends ListenerAdapter {
     private static final Logger logger = LoggerFactory.getLogger(CommandListener.class);
-    private final Map<String, Command> commands = new HashMap<>();
+    private final Map<String, Object> commands = new HashMap<>();
 
     public CommandListener() {
-        commands.put("AREDLleaderboards", new AREDLleaderboardsCommand());
+        commands.put("aredlleaderboards", new AREDLleaderboardsCommand());
         commands.put("echo", new EchoCommand());
         logger.info("Registered commands: {}", commands.size());
     }
@@ -34,9 +35,9 @@ public class CommandListener extends ListenerAdapter {
     @Override
     public void onSlashCommandInteraction(@NotNull SlashCommandInteractionEvent event) {
         String commandName = event.getName();
-        Command command = commands.get(commandName);
+        Object rawCommand = commands.get(commandName);
 
-        if (command != null) {
+        if (rawCommand instanceof Command command) {
             logger.info("Executing command: {}", commandName, event.getUser().getName());
             command.executeSlash(event);
         } else {
