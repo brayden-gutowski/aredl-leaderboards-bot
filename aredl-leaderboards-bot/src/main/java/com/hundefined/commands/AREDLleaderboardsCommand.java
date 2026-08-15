@@ -1,16 +1,27 @@
 package com.hundefined.commands;
+import java.awt.Color;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.io.IOException;
+import java.net.http.HttpResponse;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hundefined.api.AREDLApi;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 
-import java.awt.Color;
-
 public class AREDLleaderboardsCommand implements Command {
 
     private final AREDLApi aredlApi = new AREDLApi();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Override
     public String getName() {
@@ -42,7 +53,16 @@ public class AREDLleaderboardsCommand implements Command {
         }
 
         switch (subcommand) {
-            case "global" -> showGlobalLeaderboard(event, sortMethod);
+            case "global" -> {
+                try {
+                    showGlobalLeaderboard(event, sortMethod);
+                } catch (IOException | InterruptedException e) {
+                    e.printStackTrace();
+                    event.reply("Couldn't contact AREDL API")
+                            .setEphemeral(true)
+                            .queue();
+                }
+            }
             case "server" -> event.reply("Server leaderboards WIP")
                     .setEphemeral(true)
                     .queue();
@@ -52,20 +72,79 @@ public class AREDLleaderboardsCommand implements Command {
         }
     }
 
-    private void showGlobalLeaderboard(SlashCommandInteractionEvent event, int sortType) {
+    private void showGlobalLeaderboard(SlashCommandInteractionEvent event, int sortType) throws IOException, InterruptedException {
 
         System.out.println("sortMethod: " + sortType);
 
+        Map<String, Integer> levelPositions = new HashMap<>();
+
+        HttpRequest levelRequest = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.aredl.net/v2/api/aredl/levels"))
+                .GET()
+                .build();
+
+        HttpResponse<String> levelResponse = httpClient.send(
+                levelRequest,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        JsonNode levels = objectMapper.readTree(levelResponse.body());
+
+        for (JsonNode level : levels) {
+            String name = level.path("name")
+                .asText();
+            int position = level.path("position").asInt();
+
+            levelPositions.put(name, position);
+        }
+
         event.deferReply().queue();
 
-        aredlApi.getGlobalLeaderboard(10)
-                .thenAccept(json -> {
 
-                    JsonNode players = json.get("data");
+
+        aredlApi.getAllGlobalLeaderboard()
+                .thenAccept(playerList -> {
 
                     StringBuilder leaderboard = new StringBuilder();
 
-                    for (JsonNode entry : players) {
+
+                    switch (sortType) {
+                        case 1:
+                            playerList.sort(
+                                Comparator.comparingInt(
+                                    (JsonNode player) -> player.path("extremes").asInt()
+                                ).reversed()
+                            );
+                            break;
+
+                        case 2:
+                            playerList.sort(
+                                Comparator.comparingInt(player ->
+                                    levelPositions.getOrDefault(
+                                        player.path("hardest").path("name").asText(),
+                                        Integer.MAX_VALUE
+                                    )
+                                )
+                            );
+                            break;
+
+                        case 0:
+                        default:
+                            playerList.sort(
+                                Comparator.comparingDouble(
+                                    (JsonNode player) -> player.path("total_points").asDouble()
+                                ).reversed()
+                            );
+                            break;
+                    }
+
+                    List<JsonNode> playerListDisplay  = new java.util.ArrayList<>(playerList.subList(0, 10));
+
+                    int counter = 1;
+
+
+
+                    for (JsonNode entry : playerListDisplay) {
 
                         int rank = entry.get("rank").asInt();
 
@@ -90,12 +169,14 @@ public class AREDLleaderboardsCommand implements Command {
 
                         String medal = "";
 
-                        if (rank == 1) {
+                        if (counter == 1) {
                             medal = "🥇 ";
-                        } else if (rank == 2) {
+                        } else if (counter == 2) {
                             medal = "🥈 ";
-                        } else if (rank == 3) {
+                        } else if (counter == 3) {
                             medal = "🥉 ";
+                        } else {
+                            medal = "";
                         }
 
                         if (sortType == 0) {
@@ -136,6 +217,7 @@ public class AREDLleaderboardsCommand implements Command {
                             );
 
                         }
+                        counter++;
                     }
 
                     EmbedBuilder embed = new EmbedBuilder();
@@ -162,11 +244,6 @@ public class AREDLleaderboardsCommand implements Command {
 
                     return null;
                 });
-    }
-
-    private void print(String string) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'print'");
     }
 
     @Override
