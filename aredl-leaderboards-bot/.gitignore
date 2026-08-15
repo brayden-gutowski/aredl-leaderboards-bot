@@ -1,5 +1,5 @@
 # Discord bot token / private configuration
-src/resources/config.properties
+src/main/resources/config.properties
 
 # Java build files
 *.class
