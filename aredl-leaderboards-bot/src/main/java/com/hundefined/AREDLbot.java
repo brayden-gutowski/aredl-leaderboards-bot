@@ -12,8 +12,9 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
-import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
+import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+
 
 public class AREDLbot {
     private static final Logger logger = LoggerFactory.getLogger(AREDLbot.class);
@@ -53,10 +54,19 @@ public class AREDLbot {
         jda.updateCommands()
                 .addCommands(
                     Commands.slash("aredlleaderboards", "Displays the AREDL leaderboards either server-wide or globally")
-                        .addSubcommands(
-                            new SubcommandData("global", "View the global AREDL leaderboard"),
-                            new SubcommandData("server", "View the server AREDL leaderboard")
+                        .addOptions(
+                            new OptionData(OptionType.STRING, "scope", "Choose the scope of the leaderboard").setRequired(true)
+                                .addChoice("global", "global")
+                                .addChoice("country", "country")
+                                .addChoice("server", "server")
+                        )
+                        .addOptions(
+                            new OptionData(OptionType.STRING, "sort", "Choose how to sort the leaderboard").setRequired(true)
+                                .addChoice("points", "points")
+                                .addChoice("extremes", "extremes")
+                                .addChoice("hardest", "hardest")
                         ),
+                        
                     Commands.slash("echo", "Test command to echo back a message")
                         .addOption(OptionType.STRING, "text", "The message to echo back", true)
                 )
