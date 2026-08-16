@@ -57,7 +57,6 @@ public class AREDLbot {
                         .addOptions(
                             new OptionData(OptionType.STRING, "scope", "Choose the scope of the leaderboard").setRequired(true)
                                 .addChoice("global", "global")
-                                .addChoice("country", "country")
                                 .addChoice("server", "server")
                         )
                         .addOptions(

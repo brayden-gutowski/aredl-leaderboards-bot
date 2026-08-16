@@ -8,7 +8,7 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
-
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +43,26 @@ public class CommandListener extends ListenerAdapter {
         } else {
             logger.warn("Received unknown command: {}", commandName);
             event.reply("Unknown command: " + commandName).setEphemeral(true).queue();
+        }
+    }
+    @Override
+    public void onButtonInteraction(
+            @NotNull ButtonInteractionEvent event
+    ) {
+
+        if (!event.getComponentId()
+                .startsWith("aredl_global:")) {
+
+            return;
+        }
+
+        Object rawCommand =
+                commands.get("aredlleaderboards");
+
+        if (rawCommand
+                instanceof AREDLleaderboardsCommand command) {
+
+            command.handleButton(event);
         }
     }
 }

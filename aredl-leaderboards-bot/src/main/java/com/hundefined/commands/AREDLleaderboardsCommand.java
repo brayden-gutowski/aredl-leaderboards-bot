@@ -4,7 +4,11 @@ import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-
+import java.util.ArrayList;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.buttons.Button;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.interactions.InteractionHook;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.hundefined.api.AREDLApi;
 
@@ -13,8 +17,9 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 
 public class AREDLleaderboardsCommand implements Command {
 
-    private final AREDLApi aredlApi = new AREDLApi();
+    private static final int PLAYERS_PER_PAGE = 10;
 
+    private final AREDLApi aredlApi = new AREDLApi();
     @Override
     public String getName() {
         return "aredlleaderboards";
@@ -49,7 +54,7 @@ public class AREDLleaderboardsCommand implements Command {
         switch (subcommand) {
             case "global" -> {
                 try {
-                    showGlobalLeaderboard(event, sortMethod);
+                    showGlobalLeaderboard(event.getHook(), sortMethod, 1);
                 } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
                     event.getHook()
@@ -66,21 +71,26 @@ public class AREDLleaderboardsCommand implements Command {
         }
     }
 
-    private void showGlobalLeaderboard(SlashCommandInteractionEvent event, int sortType) throws IOException, InterruptedException {
+    private void showGlobalLeaderboard(InteractionHook hook, int sortType, int page) throws IOException, InterruptedException {
 
         System.out.println("sortMethod: " + sortType);
 
         Map<String, Integer> levelPositions =
             aredlApi.getCachedLevelPositions();
 
-        List<JsonNode> playerList = aredlApi.getCachedLeaderboard();
+        List<JsonNode> cachedPlayerList =
+                aredlApi.getCachedLeaderboard();
 
-        if (playerList == null) {
-            event.getHook()
-                    .editOriginal("AREDL leaderboard cache is still loading. Try again shortly.")
-                    .queue();
+        if (cachedPlayerList == null) {
+            hook.editOriginal(
+                    "AREDL leaderboard cache is still loading. Try again shortly."
+            ).queue();
+
             return;
         }
+
+        List<JsonNode> playerList =
+                new ArrayList<>(cachedPlayerList);
 
         StringBuilder leaderboard = new StringBuilder();
 
@@ -115,9 +125,30 @@ public class AREDLleaderboardsCommand implements Command {
                 break;
         }
 
-        List<JsonNode> playerListDisplay  = new java.util.ArrayList<>(playerList.subList(0, 10));
+        int totalPages = Math.max(
+                1,
+                (playerList.size() + PLAYERS_PER_PAGE - 1)
+                        / PLAYERS_PER_PAGE
+        );
 
-        int counter = 1;
+        // Safety: don't allow an invalid page
+        page = Math.max(1, Math.min(page, totalPages));
+
+        int startIndex =
+                (page - 1) * PLAYERS_PER_PAGE;
+
+        int endIndex =
+                Math.min(
+                        startIndex + PLAYERS_PER_PAGE,
+                        playerList.size()
+                );
+
+        List<JsonNode> playerListDisplay =
+                new ArrayList<>(
+                        playerList.subList(startIndex, endIndex)
+                );
+
+        int counter = startIndex + 1;
 
 
 
@@ -201,12 +232,113 @@ public class AREDLleaderboardsCommand implements Command {
 
         embed.setTitle("🌎  AREDL Leaderboard -- Global  🌏");
         embed.setDescription(leaderboard.toString());
-        embed.setColor(new Color(0,33,165));
-        embed.setFooter("*Data pulled from AREDL API and is updated at midnight EST");
+        embed.setColor(new Color(250, 70, 22));
+        embed.setFooter("Page " + page + " / " + totalPages + "  •  Data pulled from AREDL API and is updated at midnight EST");
 
-        event.getHook()
-                .editOriginalEmbeds(embed.build())
+        hook.editOriginalEmbeds(embed.build())
+                .setComponents(
+                        createPageButtons(
+                                page,
+                                totalPages,
+                                sortType
+                        )
+                )
                 .queue();
+    }
+
+    private ActionRow createPageButtons(
+            int page,
+            int totalPages,
+            int sortType
+    ) {
+
+        int backPage = Math.max(1, page - 1);
+
+        int nextPage = Math.min(totalPages, page + 1);
+
+        Button backButton =
+                Button.primary(
+                        "aredl_global:" + sortType + ":" + backPage,
+                        "← Back"
+                )
+                .withDisabled(page <= 1);
+
+        Button nextButton =
+                Button.primary(
+                        "aredl_global:" + sortType + ":" + nextPage,
+                        "Next →"
+                )
+                .withDisabled(page >= totalPages);
+
+        return ActionRow.of(
+                backButton,
+                nextButton
+        );
+    }
+
+    public void handleButton(ButtonInteractionEvent event) {
+
+        String buttonId =
+                event.getComponentId();
+
+        if (!buttonId.startsWith("aredl_global:")) {
+            return;
+        }
+
+        String[] parts =
+                buttonId.split(":");
+
+        if (parts.length != 3) {
+            return;
+        }
+
+        final int sortType;
+        final int page;
+
+        try {
+
+            sortType =
+                    Integer.parseInt(parts[1]);
+
+            page =
+                    Integer.parseInt(parts[2]);
+
+        } catch (NumberFormatException e) {
+
+            event.reply(
+                    "Invalid leaderboard button."
+            )
+            .setEphemeral(true)
+            .queue();
+
+            return;
+        }
+
+        event.deferEdit().queue(hook -> {
+
+            try {
+
+                showGlobalLeaderboard(
+                        hook,
+                        sortType,
+                        page
+                );
+
+            } catch (
+                    IOException |
+                    InterruptedException e
+            ) {
+
+                e.printStackTrace();
+
+                hook.sendMessage(
+                        "Couldn't update the AREDL leaderboard."
+                )
+                .setEphemeral(true)
+                .queue();
+            }
+
+        });
     }
 
     @Override
