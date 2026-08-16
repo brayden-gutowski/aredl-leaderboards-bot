@@ -49,7 +49,7 @@ public class AREDLbot {
             logger.error("JDA instance is not initialized. Cannot register slash commands.");
             return;
         }
-
+        
         logger.info("Registering slash commands...");
         jda.updateCommands()
                 .addCommands(

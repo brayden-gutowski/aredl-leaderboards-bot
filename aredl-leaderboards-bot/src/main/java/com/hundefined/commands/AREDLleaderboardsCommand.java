@@ -1,17 +1,11 @@
 package com.hundefined.commands;
 import java.awt.Color;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.io.IOException;
-import java.net.http.HttpResponse;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hundefined.api.AREDLApi;
 
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -20,8 +14,6 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 public class AREDLleaderboardsCommand implements Command {
 
     private final AREDLApi aredlApi = new AREDLApi();
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-    private static final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Override
     public String getName() {
@@ -35,6 +27,8 @@ public class AREDLleaderboardsCommand implements Command {
 
     @Override
     public void executeSlash(SlashCommandInteractionEvent event) {
+        event.deferReply().queue();
+
         String subcommand = event.getOption("scope").getAsString();
         int sortMethod = 0;
         
@@ -58,16 +52,16 @@ public class AREDLleaderboardsCommand implements Command {
                     showGlobalLeaderboard(event, sortMethod);
                 } catch (IOException | InterruptedException e) {
                     e.printStackTrace();
-                    event.reply("Couldn't contact AREDL API")
-                            .setEphemeral(true)
+                    event.getHook()
+                            .editOriginal("Couldn't contact AREDL API")
                             .queue();
                 }
             }
-            case "server" -> event.reply("Server leaderboards WIP")
-                    .setEphemeral(true)
+            case "server" -> event.getHook()
+                    .editOriginal("Server leaderboards WIP")
                     .queue();
-            case "country" -> event.reply("Country leaderboards WIP")
-                    .setEphemeral(true)
+            case "country" -> event.getHook()
+                    .editOriginal("Country leaderboards WIP")
                     .queue();
         }
     }
@@ -76,174 +70,143 @@ public class AREDLleaderboardsCommand implements Command {
 
         System.out.println("sortMethod: " + sortType);
 
-        Map<String, Integer> levelPositions = new HashMap<>();
+        Map<String, Integer> levelPositions =
+            aredlApi.getCachedLevelPositions();
 
-        HttpRequest levelRequest = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.aredl.net/v2/api/aredl/levels"))
-                .GET()
-                .build();
+        List<JsonNode> playerList = aredlApi.getCachedLeaderboard();
 
-        HttpResponse<String> levelResponse = httpClient.send(
-                levelRequest,
-                HttpResponse.BodyHandlers.ofString()
-        );
-
-        JsonNode levels = objectMapper.readTree(levelResponse.body());
-
-        for (JsonNode level : levels) {
-            String name = level.path("name")
-                .asText();
-            int position = level.path("position").asInt();
-
-            levelPositions.put(name, position);
+        if (playerList == null) {
+            event.getHook()
+                    .editOriginal("AREDL leaderboard cache is still loading. Try again shortly.")
+                    .queue();
+            return;
         }
 
-        event.deferReply().queue();
+        StringBuilder leaderboard = new StringBuilder();
+
+
+        switch (sortType) {
+            case 1:
+                playerList.sort(
+                    Comparator.comparingInt(
+                        (JsonNode player) -> player.path("extremes").asInt()
+                    ).reversed()
+                );
+                break;
+
+            case 2:
+                playerList.sort(
+                    Comparator.comparingInt(player ->
+                        levelPositions.getOrDefault(
+                            player.path("hardest").path("name").asText(),
+                            Integer.MAX_VALUE
+                        )
+                    )
+                );
+                break;
+
+            case 0:
+            default:
+                playerList.sort(
+                    Comparator.comparingDouble(
+                        (JsonNode player) -> player.path("total_points").asDouble()
+                    ).reversed()
+                );
+                break;
+        }
+
+        List<JsonNode> playerListDisplay  = new java.util.ArrayList<>(playerList.subList(0, 10));
+
+        int counter = 1;
 
 
 
-        aredlApi.getAllGlobalLeaderboard()
-                .thenAccept(playerList -> {
+        for (JsonNode entry : playerListDisplay) {
 
-                    StringBuilder leaderboard = new StringBuilder();
+            int rank = entry.get("rank").asInt();
 
+            String playerName =
+                    entry.get("user")
+                            .get("global_name")
+                            .asText();
 
-                    switch (sortType) {
-                        case 1:
-                            playerList.sort(
-                                Comparator.comparingInt(
-                                    (JsonNode player) -> player.path("extremes").asInt()
-                                ).reversed()
-                            );
-                            break;
+            double points =
+                    entry.get("total_points").asDouble() / 10.0;
 
-                        case 2:
-                            playerList.sort(
-                                Comparator.comparingInt(player ->
-                                    levelPositions.getOrDefault(
-                                        player.path("hardest").path("name").asText(),
-                                        Integer.MAX_VALUE
-                                    )
-                                )
-                            );
-                            break;
+            int extremes =
+                    entry.get("extremes").asInt();
 
-                        case 0:
-                        default:
-                            playerList.sort(
-                                Comparator.comparingDouble(
-                                    (JsonNode player) -> player.path("total_points").asDouble()
-                                ).reversed()
-                            );
-                            break;
-                    }
+            String hardest = "Unknown";
 
-                    List<JsonNode> playerListDisplay  = new java.util.ArrayList<>(playerList.subList(0, 10));
+            if (!entry.get("hardest").isNull()) {
+                hardest = entry.get("hardest")
+                        .get("name")
+                        .asText();
+            }
 
-                    int counter = 1;
+            String medal = "";
 
+            if (counter == 1) {
+                medal = "🥇 ";
+            } else if (counter == 2) {
+                medal = "🥈 ";
+            } else if (counter == 3) {
+                medal = "🥉 ";
+            } else {
+                medal = "";
+            }
 
+            if (sortType == 0) {
+                leaderboard.append(
+                        String.format(
+                                "%s**#%d %s**\n%,.1f points • %d extreme demons • Hardest: %s\n\n",
+                                medal,
+                                rank,
+                                playerName,
+                                points,
+                                extremes,
+                                hardest
+                        )
+                );
+            } else if (sortType == 1) {
+                leaderboard.append(
+                        String.format(
+                                "%s**#%d %s**\n%,d extreme demons • Hardest: %s • %.1f points\n\n",
+                                medal,
+                                rank,
+                                playerName,
+                                extremes,
+                                hardest,
+                                points
+                        )
+                );
+            } else if (sortType == 2) {
+                leaderboard.append(
+                        String.format(
+                                "%s**#%d %s**\nHardest: %s • %.1f points • %,d extreme demons\n\n",
+                                medal,
+                                rank,
+                                playerName,
+                                hardest,
+                                points,
+                                extremes
+                        )
+                );
 
-                    for (JsonNode entry : playerListDisplay) {
+            }
+            counter++;
+        }
 
-                        int rank = entry.get("rank").asInt();
+        EmbedBuilder embed = new EmbedBuilder();
 
-                        String playerName =
-                                entry.get("user")
-                                     .get("global_name")
-                                     .asText();
+        embed.setTitle("🌎  AREDL Leaderboard -- Global  🌏");
+        embed.setDescription(leaderboard.toString());
+        embed.setColor(new Color(0,33,165));
+        embed.setFooter("*Data pulled from AREDL API and is updated at midnight EST");
 
-                        double points =
-                                entry.get("total_points").asDouble() / 10.0;
-
-                        int extremes =
-                                entry.get("extremes").asInt();
-
-                        String hardest = "Unknown";
-
-                        if (!entry.get("hardest").isNull()) {
-                            hardest = entry.get("hardest")
-                                    .get("name")
-                                    .asText();
-                        }
-
-                        String medal = "";
-
-                        if (counter == 1) {
-                            medal = "🥇 ";
-                        } else if (counter == 2) {
-                            medal = "🥈 ";
-                        } else if (counter == 3) {
-                            medal = "🥉 ";
-                        } else {
-                            medal = "";
-                        }
-
-                        if (sortType == 0) {
-                            leaderboard.append(
-                                    String.format(
-                                            "%s**#%d %s**\n%,.1f points • %d extreme demons • Hardest: %s\n\n",
-                                            medal,
-                                            rank,
-                                            playerName,
-                                            points,
-                                            extremes,
-                                            hardest
-                                    )
-                            );
-                        } else if (sortType == 1) {
-                            leaderboard.append(
-                                    String.format(
-                                            "%s**#%d %s**\n%,d extreme demons • Hardest: %s • %.1f points\n\n",
-                                            medal,
-                                            rank,
-                                            playerName,
-                                            extremes,
-                                            hardest,
-                                            points
-                                    )
-                            );
-                        } else if (sortType == 2) {
-                            leaderboard.append(
-                                    String.format(
-                                            "%s**#%d %s**\nHardest: %s • %.1f points • %,d extreme demons\n\n",
-                                            medal,
-                                            rank,
-                                            playerName,
-                                            hardest,
-                                            points,
-                                            extremes
-                                    )
-                            );
-
-                        }
-                        counter++;
-                    }
-
-                    EmbedBuilder embed = new EmbedBuilder();
-
-                    embed.setTitle("🌎  AREDL Leaderboard -- Global  🌏");
-                    embed.setDescription(leaderboard.toString());
-                    embed.setColor(new Color(0,33,165));
-                    embed.setFooter("*Data pulled from AREDL API");
-
-                    event.getHook()
-                            .editOriginalEmbeds(embed.build())
-                            .queue();
-                })
-
-                .exceptionally(error -> {
-
-                    error.printStackTrace();
-
-                    event.getHook()
-                            .editOriginal(
-                                    "Couldn't contact AREDL API"
-                            )
-                            .queue();
-
-                    return null;
-                });
+        event.getHook()
+                .editOriginalEmbeds(embed.build())
+                .queue();
     }
 
     @Override
