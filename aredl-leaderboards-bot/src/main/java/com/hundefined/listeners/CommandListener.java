@@ -49,9 +49,8 @@ public class CommandListener extends ListenerAdapter {
     public void onButtonInteraction(
             @NotNull ButtonInteractionEvent event
     ) {
-
         if (!event.getComponentId()
-                .startsWith("aredl_global:")) {
+                .startsWith("aredl_")) {
 
             return;
         }

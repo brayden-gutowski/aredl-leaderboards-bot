@@ -13,9 +13,11 @@ This bot has different capabilities than the official AREDL discord server bot, 
 
 🌍 Afterward, choose global, country, or server for the scope of the search! 🌎
 
+🏠 Server-wide leaderboards currently only work with users registered to AREDL through discord 🏠
+
 🔥 Finally, choose how to sort the list!  You can currently sort by points, extreme demon count, or by hardest level 🔥
 
-🏠 Server-wide and country leaderboards are currently being worked on 🏠
+
 
 If you think this idea is unique and you want to gain experience working with APIs, please feel free to contribute!  Any contributions are welcome!
 
